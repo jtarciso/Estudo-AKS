@@ -1,0 +1,269 @@
+# Login no Azure
+az login
+
+# Parametros
+rg=rg-basic
+local=australiaeast
+aks=aks-basic
+sku=Standard_B2s
+k8sversion=''
+
+# Instalar kubectl
+#az aks install-cli
+
+#Criar RG
+az group create -n $rg -l $local
+
+#Criar aks
+az aks create -g $rg -n $aks --node-count 1 --node-vm-size $sku --generate-ssh-keys #--kubernetes-version $k8sversion
+
+#Comandos AKS
+#Obter Credenciais
+az aks get-credentials -g $rg -n $aks
+
+#Obter versão
+kubectl version -o yaml
+
+#informações do cluster
+kubectl cluster-info
+
+#Configurações do cluester
+kubectl config view
+
+#API resources
+kubectl api-resources
+
+#API version
+kubectl api-versions
+
+#GET - Todos os objetos de todos os namespaces
+kubectl get all
+kubectl get all --all-namespaces
+
+#GET - Obter Pods
+kubectl get pods
+kubectl get po
+kubectl get po --all-namespaces
+kubectl get pods --namespace kube-system
+
+#GET - Obter namaspaces
+kubectl get namespaces
+kubectl get ns 
+kubectl get pods -n kube-system
+
+#GET - Obter nodes
+kubectl get nodes
+kubectl get no 
+kubectl get nodes -o wide
+
+# Criar POD com imagem NGINX
+kubectl run nginx --image=nginx
+kubectl run busybox --image=busybox --restart=Never^
+
+#Delete pod
+kubectl delete pod busybox
+kubectl delete pod nginx
+
+#Listar containers no POD
+kubectl get pods -o jsonpath="{.item[*].spec.containers[*].name}"
+
+#DESCRIBE - Descrever objetos kubernetes
+kubectl describe pod nginx
+kubectl describe node aks-nodepool1-32335981-vmss000000
+
+#LOGS - Obter logs
+kubectl logs nginx
+kubectl logs nginx nginx #nome do container
+kubectl logs nginx --since=30m nginx #ultimos 30 min
+
+#Versões de APIs
+kubectl api-versions
+
+#Criar Pod com manifesto YAML
+kubectl apply -f pods/pod.yaml
+
+#Criar Pod com 2 containers manifesto YAML (pratica nao recomendavel)
+kubectl apply -f pods/pod-2containers.yaml
+
+kubectl get pods --watch
+
+#Executar comandos no container
+export MSYS_NO_PATHCONV=1 #Para usar cominhos fisicos quando acessar o container no windows
+kubectl exec -it pod-containers -c containers-1 /bin/bash
+kubectl exec pod-containers --container containers-1 -- sh -c "cat /usr/share/nginx/html/index.html"
+
+$Adicionar arquivo ao container
+kubectl exec pod-containers --container containers-1 -- sh -c "echo \"<b>Arquivo criado do pod.</b>\" > /usr/share/nginx/html/pagina.html
+
+#Listar nodes
+kubectl get nodes
+kubectl get no
+kubectl get no -o wide
+kubectl describe node aks-nodepool1-16997837-vmss000000
+
+#Listar nodePools no aks
+az aks nodepool list -g $rg --cluster-name $aks -o table 
+
+#Detalhes do nodePool System
+az aks nodepool show -g $rg --cluster-name $aks -n nodepooluser -o yaml
+az aks nodepool show -g $rg --cluster-name $aks -n nodepooluser --query powerState.code #consulta o node pool mostrando o status
+
+#Adicionar nodePoll system
+az aks nodepool add -g $rg --cluster-name $aks -n nodepool2 --node-count 3 --node-vm-size $sku --mode System
+
+#Excluir node pool
+az aks nodepool delete -g $rg --cluster-name $aks -n nodepooluser
+
+#Adiciona nodePool user
+az aks nodepool add -g $rg --cluster-name $aks -n nodepooluser --node-count 1 --node-vm-size $sku --mode User
+
+#Parar e iniciar nodePool
+az aks nodepool stop --nodepool-name nodepooluser -g $rg --cluster-name $aks
+az aks nodepool start --nodepool-name nodepooluser -g $rg --cluster-name $aks
+
+
+##Namespaces
+#Listar namespaces
+kubectl get namespaces
+kubectl get ns
+
+#Descrever namespace
+kubectl describe ns default
+
+#Criar namespace
+kubectl create namespace desenvolvimento
+kubectl create namespace homologacao
+kubectl create namespace producao
+
+#Excluir namespace
+kubectl delete namespace producao
+
+#Criar namespace com manifesto yaml
+kubectl apply -f ns-producao.yaml
+
+#Listar labels do namespace
+kubectl get namespaces --show-labels
+
+#Criar pod no namespace producao
+kubectl run nginx --image=nginx --namespace producao
+kubectl get pods --namespace producao
+
+#Criar pod com manifesto waml no namespace desenvolvimento
+kubectl apply -f pod-dev.yaml
+kubectl get pods --namespace desenvolvimento
+
+#Excluir namespace desenvolvimento
+kubectl delete namespace desenvolvimento
+
+#Listar os pods de todos os namespaces
+kubectl get pods --all-namespaces
+
+#Criar pods com annotations com arquivo yaml
+kubectl apply -f pods/pod-annotation.yaml
+
+#Labels
+kubectl apply -f pod-label-1.yaml
+kubectl apply -f pod-label-2.yaml
+kubectl apply -f pod-label-3.yaml
+
+kubectl get pods 
+kubectl get pods --show-labels
+
+#Pesquisar por label
+kubectl get pods -l "env=prod" --show-labels
+kubectl get pods -l "app-nginx-web" --show-labels
+kubectl get pods -l "env!=dev" --show-labels
+kubectl get pods -l "env in (prod)" --show-labels
+
+#Node Selectors
+kubectl get nodes --show-labels
+kubectl apply -f pod-selector.yaml
+
+kubectl label node aks-nodepool1-34016488-vmss000000 ambiente=producao
+
+#Node name
+#Listar nodePool no cluster do aks
+az aks nodepool list -g $rg --cluster-name $aks --output table
+#listar node
+kubectl get nodes
+
+#Adicionar nodePool system
+az aks nodepool add -g $rg --cluster-name $aks -n nodepool2 --mode system --node-count 1 --node-vm-size $sku
+
+#Aplicando o pod ao node com o arquivo yaml
+kubectl apply -f pod-nodename.yaml
+kubectl describe pod pod-nodename
+
+
+##Upgrade de versão
+
+#Obter versões disponiveis do aks por regiao
+az aks get-versions -l $local -o table
+az aks get-versions -l brazilsouth -o table
+
+#Obter a versão do AKS
+az aks show -g $rg -n $aks -o yaml
+az aks show -g $rg -n $aks --query currentKubernetesVersion -o yaml
+
+#Obter upgrades disponiveis para atualizacao do kubernetes no aks
+az aks get-upgrades -g $rg -n $aks -o table
+
+#Criar parametro
+k8sversionnew='1.25.6'
+
+
+#upgrade no aks cluster e nodes
+az aks upgrade -g $rg -n $aks --kubernetes-version $k8sversionnew
+
+#Atualizar apenas nodePool
+#Listar nodePool
+az aks nodepool list -g $rg --cluster-name $aks -o table
+#Criar nodePool com versão antiga
+az aks nodepool add -g $rg --cluster-name $aks --name nodepool3 --kubernetes-version 1.24.10
+#Atualizar node
+az aks nodepool upgrade -g $rg --cluster-name $aks --name nodepool3 --kubernetes-version 1.25.6
+
+###Replica set
+
+#Listar replica sets
+kubectl get replicasets
+kubectl get replicasets --all-namespaces
+kubectl get rs
+
+#Criar replica set
+kubectl apply -f replicaset.yaml
+
+#Scale UP 
+kubectl scale replicaset app-web --replicas=5
+
+#Scale Down
+kubectl scale replicaset app-web --replicas=2
+
+#Excluir replicaset
+kubectl delete rs app-web
+
+
+###Deployments
+
+#Listar desployments
+kubectl get Deployments
+
+#Aplicar deployments
+kubectl apply -f deployment.yaml
+
+#Escalar deployment UP
+kubectl scale deployment deploy-app --replicas=4
+
+#Escalar deployment Down
+kubectl scale deployment deploy-app --replicas=2
+
+#Excluir deployment
+kubectl delete -f deployment.yaml
+
+###Service: Cluster IP
+
+###Service: NodePort
+
+###Service: Load balancer
+
+

@@ -1,0 +1,25 @@
+az login
+
+#Build da Imagem local
+docker build -t site-html .
+
+#Login no ACR
+az acr login --name appcontaines
+
+#Tag na Imagem Local
+docker tag site-html appcontaines.azurecr.io/site-html
+
+#Push para o ACR
+docker push appcontaines.azurecr.io/site-html
+
+#Pull do ACR para maquina local
+docker pull appcontaines.azurecr.io/site-html
+
+#Rodar a imagem vinda do ACR
+docker run -d -p 8880:80 appcontaines.azurecr.io/site-html
+
+#Lista container em execução
+docker ps 
+
+#Parar container
+docker stop b0a6d53364b6
