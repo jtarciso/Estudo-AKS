@@ -3,15 +3,15 @@ kind: ReplicaSet
 metadata:
   name: app-web
 spec:
+  replicas: 3
   selector:
     matchLabels:
       app: app-web
-    replicas: 3
-    template:
-      metadata:
+  template:
+    metadata:
       labels:
         app: app-web
-      spec:
+  spec:
         containers:
-          - name : app-web
+          - name: app-web
             image: nginx

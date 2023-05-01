@@ -3,9 +3,9 @@ kind: Pod
 metadata:
   name: pod-nodename
 spec:
-  nodeName: aks-nodepool2-27659871-vmss000000
+  nodeName: aks-nodepooluser-83849581-vmss000000
   containers:
-  - name: pod-nodename
+  - name: container-nodename
     image: nginx
     resources:
       limits:

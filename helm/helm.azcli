@@ -1,0 +1,67 @@
+
+##Helm - Gerenciados de pacotes para kubenetes
+
+##Principais comandos
+
+#helm --help
+#helm version
+#helm repo add [repositorio-name] [url]
+#helm repo remove [repositorio-name]
+#helm repo update
+#helm repo list - listar todos os repositorios
+#helm search [keyword] - Pesquisar charts
+#helm search repo [keyword] - Pesquisar por repositorio
+#helm install [app-name] [chart] - Instalar helm chart
+#helm isntall [app-name] [chart] --namespace [namespace]
+#helm isntall [app-name] [chart] --values [yaml-fle/url] - especificando os valores
+#helm isntall [app-name] --dry-run --debug
+#helm unistall [release]
+#helm list - Listar todas as releases
+#helm list --all-namespaces
+#helm list --namespace [namespace]
+#helm status [release]
+#helm history [release]
+#helm create [name]
+#helm package [chart-path] - Empacotar o chart
+#helm pull [chart]
+#helm dependency list [chart]
+
+#Verificar versão do helm
+helm version
+
+#Listar repositorios
+helm repo list
+
+#Adicionar repositorio do bitnami
+helm repo add bitnami https://charts.bitnami.com/bitnami
+
+#Localizar charts no repositorio helm
+helm search repo bitnami
+
+#Atualizar repo
+helm repo update
+
+#Criar namespace
+kubectl create ns helm
+
+#INstalar release no namespace helm
+helm install wp-treinamento-helm bitnami/wordpress -n helm
+
+#Recuperar segredo
+echo Password: $(kubectl get secret --namespace helm wp-treinamento-helm-wordpress -o jsonpath="{.data.wordpress-password}" | base64 -d)
+
+#Listar services
+kubectl get svc -n helm
+
+#Listar deployments
+kubectl get deploy -n helm
+
+
+#Criar chart helm
+helm create site
+
+#Criar namespace
+kubectl create ns site
+
+#Instalar chart site
+helm install site-chart site/ --values site/values.yaml -n site

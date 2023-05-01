@@ -6,20 +6,57 @@ rg=rg-basic
 local=australiaeast
 aks=aks-basic
 sku=Standard_B2s
+vnet=vnet-aks
+snet=snet-aks
+app=kubenet-app
 k8sversion=''
 
 # Instalar kubectl
-#az aks install-cli
+az aks install-cli
 
 #Criar RG
 az group create -n $rg -l $local
 
+#Criar vnet e subnet
+az network vnet create -g $rg -n $vnet --address-prefixes 192.168.0.0/16 --subnet-name $snet --subnet-prefix 192.168.1.0/24
+
+#Obter ID da VNET e atribuir a variavel
+az network vnet show -g $rg -n $vnet --query id -o tsv
+vnetId=$(az network vnet show -g $rg -n $vnet --query id -o tsv)
+
+#Obter ID da SNET e atribuir a variavel
+az network vnet subnet show -g $rg --vnet-name $vnet -n $snet --query id -o tsv
+snetId=$(az network vnet subnet show -g $rg --vnet-name $vnet -n $snet --query id -o tsv)
+
+#se estiver utilizando bash no windows
+export MSYS_NO_PATHCONV=1
+
+#cRIAR ROLE PARA AKS E VNET
+az ad sp create-for-rbac -n $app
+
+appId=7eedc6eb-48ab-42bd-b0f2-4a868f87e9d3
+pass=G_88Q~PiWcqPFqiKXA4JHZR_wtmz-yA_bLM.Bci3
+
+#listar app registrations
+az ad app list -o table
+
+#Atribuir permissão de contributor a vnet como network contributor
+az role assignment create -assignee appId --scope $vnetId --role "Network Contributor"
+
 #Criar aks
-az aks create -g $rg -n $aks --node-count 1 --node-vm-size $sku --generate-ssh-keys #--kubernetes-version $k8sversion
+az aks create -g $rg -n $aks --node-count 1 --node-vm-size $sku --generate-ssh-keys \
+    --network-plugin azure \
+    --vnet-subnet-id $snetId \
+    --docker-bridge-address 172.17.0.1/16 \
+    --dns-service-ip 10.0.0.10 \
+    --pod-cidr 10.244.0.0/16 \
+    --service-cidr 10.0.0.0/16 \
+    --service-principal $appId \
+    --client-secret $pass
 
 #Comandos AKS
 #Obter Credenciais
-az aks get-credentials -g $rg -n $aks
+y
 
 #Obter versão
 kubectl version -o yaml
@@ -80,7 +117,7 @@ kubectl logs nginx --since=30m nginx #ultimos 30 min
 kubectl api-versions
 
 #Criar Pod com manifesto YAML
-kubectl apply -f pods/pod.yaml
+kubectl apply -f pod.yaml
 
 #Criar Pod com 2 containers manifesto YAML (pratica nao recomendavel)
 kubectl apply -f pods/pod-2containers.yaml
@@ -99,7 +136,10 @@ kubectl exec pod-containers --container containers-1 -- sh -c "echo \"<b>Arquivo
 kubectl get nodes
 kubectl get no
 kubectl get no -o wide
-kubectl describe node aks-nodepool1-16997837-vmss000000
+kubectl describe node aks-nodepool1-36924651-vmss00000
+
+#Criar node no nodepool
+az aks nodepool scale -g $rg --cluster-name $aks --name nodepool1 --node-count 2 --no-wait
 
 #Listar nodePools no aks
 az aks nodepool list -g $rg --cluster-name $aks -o table 
@@ -122,7 +162,7 @@ az aks nodepool stop --nodepool-name nodepooluser -g $rg --cluster-name $aks
 az aks nodepool start --nodepool-name nodepooluser -g $rg --cluster-name $aks
 
 
-##Namespaces
+##Namespaces - Permite organizar logicamente os recursos em grupos. Serve como um cluster virtual dentro do cluster do Kubernetes. Logicamente isolados.
 #Listar namespaces
 kubectl get namespaces
 kubectl get ns
@@ -148,7 +188,7 @@ kubectl get namespaces --show-labels
 kubectl run nginx --image=nginx --namespace producao
 kubectl get pods --namespace producao
 
-#Criar pod com manifesto waml no namespace desenvolvimento
+#Criar pod com manifesto yaml no namespace desenvolvimento
 kubectl apply -f pod-dev.yaml
 kubectl get pods --namespace desenvolvimento
 
@@ -160,6 +200,10 @@ kubectl get pods --all-namespaces
 
 #Criar pods com annotations com arquivo yaml
 kubectl apply -f pods/pod-annotation.yaml
+
+##Labels (rotulos) - Permitem que o kuberbetes agrupem recursos relacionados. ex.: Agrupar recursos por ambiente.
+##Selectors - Usados para consultar as labels. ex. o pode só será criado quando tiver a label x aplicada a ele.
+##Annotation - Adicionar metadados para os objetos do kubernetes.
 
 #Labels
 kubectl apply -f pod-label-1.yaml
@@ -223,7 +267,9 @@ az aks nodepool add -g $rg --cluster-name $aks --name nodepool3 --kubernetes-ver
 #Atualizar node
 az aks nodepool upgrade -g $rg --cluster-name $aks --name nodepool3 --kubernetes-version 1.25.6
 
-###Replica set
+###Deployment - Implanta o container no orquestrador. Adiciona, remove, implanta pods no replica set. Maneira correta de implantar um pod ou replica set.
+
+###Replica set - 
 
 #Listar replica sets
 kubectl get replicasets
@@ -260,10 +306,72 @@ kubectl scale deployment deploy-app --replicas=2
 #Excluir deployment
 kubectl delete -f deployment.yaml
 
-###Service: Cluster IP
+###Services - Expor o aplicativo ao mundo externo do cluster e comunicação interna no cluster.
 
-###Service: NodePort
+#Listar servces
+kubectl get services
+kubectl get svc --watch
 
-###Service: Load balancer
+#Aplicar service
+kubectl apply -f service.yaml
+
+#Requisicao no endpoint
+curl http://20.92.216.88
 
 
+
+
+###Ingress Controller
+
+#Criar namespace para os recursos do ingress
+ns=ingress
+kubectl create namespace $ns
+kubectl get namespaces
+
+#Adicionar repositorio oficial do ingress nginx
+helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
+helm repo add stable https://charts.helm.sh/stable/
+helm repo update
+
+#Ip do loadBalancer
+ip=20.227.27.142
+
+#Usar Helm para fazer deploy do nginx ingress controller
+helm install ingress-nginx ingress-nginx/ingress-nginx \
+    --namespace $ns \
+    --set controller.replicaCount=1 \
+    --set controller.nodeSelector."beta\.kubernetes\.io/os"=linux \
+    --set defaultBackend.nodeSelector."beta\.kubernetes\.io/os"=linux \
+    --set controller.service.externalTrafficPolicy=Local \
+    --set controller.service.locadBalancerIP="$ip"
+
+#Listar services no namespace do ingress
+kubectl get services -l app.kubernetes.io/name-ingress-nginx --namespace $ns
+
+#Listar pods
+kubectl get pods -n $ns
+
+#Acessar public ip
+curl http://$ip
+
+#Aplicar deployment
+kubectl apply -f app.yaml
+
+#Aplicar Service
+kubectl apply -f serviceapp.yaml
+
+#Aplicar Ingress
+kubectl apply -f appingress.yaml
+
+
+##Traefik
+ #Ip publico
+ az network public-ip create -g $rg -n $ip --allocation-method Static -l $local --sku standard
+
+ #adicionar traefik ao Repos Helm
+ helm repo add traefik https://helm.traefik.io/traefik
+ helm repo update
+
+ #Obter iP
+ az network public-ip show -g $rg -n $ip --query ipAddress -o tsv
+ # 20.211.27.131
